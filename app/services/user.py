@@ -8,7 +8,7 @@ from app.schemas.user import UserCreationModel, UserUpdateModel
 
 class UserService:
     def __init__(self) -> None:
-        self.table = tables["users"]
+        self.table = tables.users
 
     def list_users(self) -> list[User]:
         return self.table.all()
@@ -37,7 +37,6 @@ class UserService:
             update_data["roles"] = data.roles
 
         if not update_data:
-            # nothing to update, just return existing user
             return self.table.get({"id": pk})
 
         user = self.table.update_by(
