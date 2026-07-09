@@ -5,6 +5,7 @@ or the process environment.  Secrets like ``SECRET_KEY`` must be set
 externally — no fallback defaults are provided for production secrets.
 """
 
+import json
 from typing import Annotated
 
 from pydantic import AnyHttpUrl, Field, field_validator
@@ -53,20 +54,35 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Email Configuration (SMTP / MailHog)
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = "noreply@fastapi-handson.local"
+
+    # Profile picture uploads
+    UPLOAD_DIR: str = "uploads"
+    MAX_UPLOAD_SIZE_MB: int = 5
+
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
-    def _parse_cors_origins(cls, v: str | list[str]) -> list[str] | str:
+    def _parse_cors_origins(cls, v: str | list[str]) -> list[str]:
         """Parse CORS origins from env var — JSON array or comma-separated.
 
         Trailing slashes are stripped for consistency.
         """
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip().rstrip("/") for i in v.split(",")]
+        if isinstance(v, str):
+
+            parsed = json.loads(v)
+            if isinstance(parsed, list):
+                return [str(origin).rstrip("/") for origin in parsed]
+            raise ValueError(f"Expected a JSON array, got {type(parsed).__name__}")
         if isinstance(v, list):
             return [str(origin).rstrip("/") for origin in v]
-        if isinstance(v, str):
-            return v
-        raise ValueError(v)
+        raise ValueError(f"Unexpected type for CORS origins: {type(v).__name__}")
 
 
 settings = Settings()

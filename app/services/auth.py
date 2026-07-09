@@ -4,10 +4,13 @@ Uses bcrypt for password hashing and python-jose for JWT creation/validation.
 """
 
 import hashlib
+import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import bcrypt
+from fastapi import BackgroundTasks
 from jose import JWTError, jwt
 from pydantic import UUID4
 
@@ -27,6 +30,7 @@ from app.schemas.auth import (
     RegisterResponse,
     TokenResponse,
 )
+from app.services.email import send_activation_email
 
 
 def hash_password(plain: str) -> str:
@@ -87,8 +91,14 @@ class AuthService:
         except JWTError:
             raise InvalidTokenError("Invalid or expired token") from None
 
-    def register(self, payload: RegisterRequest) -> RegisterResponse:
-        """Create a user, persist to DB, and return a confirmation."""
+    def register(
+        self, payload: RegisterRequest, background_tasks: BackgroundTasks | None = None
+    ) -> RegisterResponse:
+        """Create a user, persist to DB, and return a confirmation.
+
+        When *background_tasks* is provided an email verification link
+        is sent asynchronously.
+        """
         existing = self.db.query(User).filter(User.email == payload.email).first()
         if existing:
             raise EmailAlreadyExistsError()
@@ -97,10 +107,14 @@ class AuthService:
             email=payload.email,
             password_hash=hash_password(payload.password),
             full_name=payload.full_name,
+            email_verification_token=secrets.token_urlsafe(32),
         )
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
+
+        if background_tasks is not None:
+            background_tasks.add_task(send_activation_email, user)
 
         return RegisterResponse(email=user.email, full_name=user.full_name)
 
@@ -131,7 +145,7 @@ class AuthService:
         if user_id_raw is None:
             raise InvalidTokenError("Invalid refresh token payload")
 
-        user = self.db.query(User).filter(User.id == user_id_raw).first()
+        user = self.db.query(User).filter(User.id == uuid.UUID(user_id_raw)).first()
         if not user:
             raise UserNotFoundError()
 

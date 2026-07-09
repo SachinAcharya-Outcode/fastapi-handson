@@ -5,13 +5,11 @@ Provides reusable dependencies for:
   - Providing an AuthService instance
 """
 
-from typing import TYPE_CHECKING, Annotated
+import uuid
+from typing import Annotated
 
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
-if TYPE_CHECKING:
-    from pydantic import UUID4
 
 from app.db.models import User
 from app.db.session import DbSessionDep
@@ -34,10 +32,10 @@ def get_current_user(
         raise InvalidTokenError("Missing or invalid authorization header")
     token = credentials.credentials
     payload = AuthService.decode_access_token(token)
-    user_id: UUID4 | None = payload.get("sub")
-    if user_id is None:
+    raw_sub: str | None = payload.get("sub")
+    if raw_sub is None:
         raise InvalidTokenError("Invalid token payload")
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == uuid.UUID(raw_sub)).first()
     if user is None:
         raise InvalidTokenError("User not found")
     return user

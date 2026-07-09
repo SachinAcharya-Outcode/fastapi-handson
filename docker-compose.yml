@@ -51,6 +51,17 @@ services:
       db:
         condition: service_healthy
 
+  mailhog:
+    image: mailhog/mailhog
+    container_name: fastapi-mailhog
+    restart: unless-stopped
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+    profiles:
+      - development
+      - production
+
   db:
     image: postgres:17-alpine
     container_name: fastapi-db

@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from starlette.middleware.cors import CORSMiddleware
+from starlette.staticfiles import StaticFiles
 
 from app.api.v1.api import api_router
 from app.core.config import settings
@@ -47,6 +48,17 @@ if settings.BACKEND_CORS_ORIGINS:
 
 # Exception handlers
 app.add_exception_handler(AppError, app_exception_handler)  # type: ignore[arg-type]
+
+# Serve uploaded files (profile pictures) in development
+if settings.DEBUG:
+    from pathlib import Path
+
+    Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+    app.mount(
+        f"/{settings.UPLOAD_DIR}",
+        StaticFiles(directory=settings.UPLOAD_DIR),
+        name="uploads",
+    )
 
 # Include API Router
 app.include_router(api_router, prefix=settings.API_V1_STR)

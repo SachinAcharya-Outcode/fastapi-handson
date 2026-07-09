@@ -7,8 +7,10 @@ Provides a test database session, a test client, and pre-built test data
 import os
 import uuid
 
-# Must be set before any app imports — SECRET_KEY has no default.
+# Must be set before any app imports — SECRET_KEY and DATABASE_URL have no
+# test-friendly defaults.
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
+os.environ.setdefault("DATABASE_URL", "sqlite:///./test.db")
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,7 +22,7 @@ from app.db.models import Base
 from app.db.session import get_db
 from app.main import app
 
-TEST_DATABASE_URL = "sqlite:///./test.db"
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "sqlite:///./test.db")
 
 engine = create_engine(
     TEST_DATABASE_URL,
@@ -57,6 +59,19 @@ def setup_database():
 
 
 @pytest.fixture
+def db_session():
+    """Provide a raw SQLAlchemy session for test assertions.
+
+    Tables are already created by the autouse ``setup_database`` fixture.
+    """
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@pytest.fixture
 def client():
     """Return a TestClient bound to the FastAPI app with overridden deps."""
     with TestClient(app) as c:
@@ -86,7 +101,11 @@ def registered_user(client, registered_user_data):
 
 @pytest.fixture
 def logged_in_user(client, registered_user_data):
-    """Log in with the registered user's credentials and return the login response body."""
+    """Register, then log in, and return the login response body."""
+    client.post(
+        f"{settings.API_V1_STR}/auth/register",
+        json=registered_user_data,
+    )
     response = client.post(
         f"{settings.API_V1_STR}/auth/login",
         json={

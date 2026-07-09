@@ -35,6 +35,8 @@ class UserResponseModel(BaseModel):
     email: str
     full_name: str
     is_active: bool
+    is_email_verified: bool
+    profile_picture_url: str | None = None
     created_at: datetime
     updated_at: datetime
 

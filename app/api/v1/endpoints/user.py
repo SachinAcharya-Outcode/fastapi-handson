@@ -6,7 +6,7 @@ HTTP request components to service calls and return responses.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile
 from fastapi_pagination import Page, Params
 from pydantic import UUID4
 
@@ -48,6 +48,7 @@ def get_me(current_user: CurrentUserDep) -> UserModel:
 def create_user(
     payload: UserCreationModel,
     service: UserServiceDep,
+    _current_user: CurrentUserDep,
 ) -> UserModel:
     """Register a new user.
 
@@ -60,6 +61,7 @@ def create_user(
 def list_users(
     service: UserServiceDep,
     params: PaginationParams,
+    _current_user: CurrentUserDep,
     search: SearchQuery = None,
     is_active: IsActiveQuery = None,
     sort_by: SortByQuery = "created_at",
@@ -119,3 +121,18 @@ def delete_user(
     """
     service.delete_user(user_id)
     return {"message": "success"}
+
+
+@router.post("/{user_id}/profile-picture", response_model=UserResponseModel)
+def upload_profile_picture(
+    user_id: UUID4,
+    file: UploadFile,
+    service: UserServiceDep,
+    _current_user: CurrentUserDep,
+) -> UserModel:
+    """Upload a profile picture for the user.
+
+    The image is compressed to a maximum of 800 px on the longest edge
+    and saved as JPEG.  Requires authentication.
+    """
+    return service.update_profile_picture(user_id, file)

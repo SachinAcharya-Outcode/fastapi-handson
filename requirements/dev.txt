@@ -1,6 +1,7 @@
 -r base.txt
 ruff
 pytest
+pytest-cov
 httpx
 mypy
 bandit

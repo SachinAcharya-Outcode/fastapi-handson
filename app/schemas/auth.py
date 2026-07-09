@@ -32,6 +32,12 @@ class RegisterResponse(BaseModel):
     message: str = "Registration successful. Please log in."
 
 
+class VerifyEmailResponse(BaseModel):
+    """Response returned after successful email verification."""
+
+    message: str = "Email verified successfully. You can now log in."
+
+
 class TokenResponse(BaseModel):
     """Response returned on successful login or refresh."""
 

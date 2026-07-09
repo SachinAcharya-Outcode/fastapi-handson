@@ -17,15 +17,39 @@ PYTEST       := $(BIN)/pytest
 UVICORN      := $(BIN)/uvicorn
 RUFF         := $(BIN)/ruff
 MYPY         := $(BIN)/mypy
+ALEMBIC      := $(BIN)/alembic
 DC           := $(DOCKER_COMPOSE)
 
 # Phony targets
-.PHONY: help install dev lint format test clean env
+.PHONY: help install dev lint format test coverage clean env
+.PHONY: alembic-upgrade alembic-downgrade alembic-revision alembic-history alembic-current alembic-check
 .PHONY: docker-dev docker-prod docker-down docker-logs docker-shell docker-clean docker-build-base
 
 test: ## Run tests using pytest
 	@echo "Running tests..."
-	$(PYTEST)
+	$(PYTEST) -v --tb=short
+
+coverage: ## Run tests with coverage report
+	@echo "Running tests with coverage..."
+	$(PYTEST) --cov=app --cov-report=term-missing --cov-report=html
+
+alembic-upgrade: ## Apply all pending migrations
+	$(ALEMBIC) upgrade head
+
+alembic-downgrade: ## Rollback the last migration
+	$(ALEMBIC) downgrade -1
+
+alembic-revision: ## Create a new migration (usage: make alembic-revision msg="description")
+	$(ALEMBIC) revision --autogenerate -m "$(msg)"
+
+alembic-history: ## Show migration history
+	$(ALEMBIC) history
+
+alembic-current: ## Show current migration version
+	$(ALEMBIC) current
+
+alembic-check: ## Check if migrations are up to date
+	$(ALEMBIC) check
 
 help: ## Display this help
 	@echo "Usage:"
@@ -60,6 +84,11 @@ format: ## Run code formatters
 	@echo "Running code formatters..."
 	$(RUFF) format .
 	$(RUFF) check --fix --select I .
+
+.PHONY: lint-fix
+
+lint-fix: ## Auto-fix lint issues where possible
+	$(RUFF) check --fix .
 
 clean: ## Remove cache and build artifacts
 	@echo "Cleaning up..."

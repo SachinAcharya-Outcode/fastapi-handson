@@ -3,14 +3,25 @@
 All database queries live here so endpoints stay free of ORM imports.
 """
 
+import uuid
+from io import BytesIO
+from pathlib import Path
+
+from fastapi import UploadFile
 from fastapi_pagination import Page, Params
 from fastapi_pagination.ext.sqlalchemy import paginate
+from PIL import Image
 from pydantic import UUID4
 from sqlalchemy import desc as sa_desc
 
+from app.core.config import settings
 from app.db.models import User
 from app.db.session import Session
-from app.exceptions.exceptions import EmailAlreadyExistsError, UserNotFoundError
+from app.exceptions.exceptions import (
+    EmailAlreadyExistsError,
+    InvalidTokenError,
+    UserNotFoundError,
+)
 from app.schemas.user import UserCreationModel, UserUpdateModel
 from app.services.auth import hash_password
 
@@ -75,6 +86,48 @@ class UserService:
         user = self.retrieve_user(user_id)
         self.db.delete(user)
         self.db.commit()
+
+    def verify_email(self, token: str) -> User:
+        """Mark a user's email as verified using the activation token.
+
+        Raises ``InvalidTokenError`` (401) if the token is unknown.
+        """
+        user = self.db.query(User).filter(
+            User.email_verification_token == token
+        ).first()
+        if not user:
+            raise InvalidTokenError("Invalid or expired verification token")
+        user.is_email_verified = True
+        user.email_verification_token = None
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
+    @staticmethod
+    def _compress_image(file: UploadFile) -> bytes:
+        """Compress an uploaded image using Pillow (max 800 px wide)."""
+        image = Image.open(file.file)
+        image.thumbnail((800, 800))
+        buf = BytesIO()
+        image.save(buf, format="JPEG", quality=85, optimize=True)
+        return buf.getvalue()
+
+    def update_profile_picture(
+        self, user_id: uuid.UUID, file: UploadFile
+    ) -> User:
+        """Compress and store a profile picture, then update the user record."""
+        data = self._compress_image(file)
+        ext = "jpg"
+        filename = f"{user_id}.{ext}"
+        upload_path = Path(settings.UPLOAD_DIR)
+        upload_path.mkdir(parents=True, exist_ok=True)
+        (upload_path / filename).write_bytes(data)
+
+        user = self.retrieve_user(user_id)
+        user.profile_picture_url = f"/{settings.UPLOAD_DIR}/{filename}"
+        self.db.commit()
+        self.db.refresh(user)
+        return user
 
     def list_users(
         self,

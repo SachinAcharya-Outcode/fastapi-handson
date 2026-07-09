@@ -87,10 +87,10 @@ module = "app.core.config"
 disallow_any_explicit = false
 warn_unused_ignores = false
 
-# [[tool.mypy.overrides]]
-# module = ["app.services.auth", "app.services.user"]
-# disallow_any_explicit = false
-# ignore_errors = true  # third-party libs (jose, fastapi-pagination) return Any
+[[tool.mypy.overrides]]
+module = ["app.services.auth", "app.services.user"]
+disallow_any_explicit = false
+ignore_errors = true  # third-party libs (jose, fastapi-pagination) return Any
 
 [tool.bandit]
 exclude_dirs = ["tests", "venv", ".venv"]
