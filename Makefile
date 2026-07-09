@@ -21,17 +21,65 @@ ALEMBIC      := $(BIN)/alembic
 DC           := $(DOCKER_COMPOSE)
 
 # Phony targets
-.PHONY: help install dev lint format test coverage clean env
-.PHONY: alembic-upgrade alembic-downgrade alembic-revision alembic-history alembic-current alembic-check
-.PHONY: docker-dev docker-prod docker-down docker-logs docker-shell docker-clean docker-build-base
+.PHONY: help
 
-test: ## Run tests using pytest
+# ══════════════════════════════════════════════
+## Environment & Setup
+# ══════════════════════════════════════════════
+
+$(VENV_DIR):
+	@echo "Creating virtual environment..."
+	$(PYTHON) -m venv $(VENV_DIR)
+	@echo "Virtual environment created at $(VENV_DIR)."
+
+env: $(VENV_DIR) ## Create virtual environment
+
+install: $(VENV_DIR) ## Install all dependencies (dev + project)
+	@echo "Installing dependencies..."
+	$(PIPE) install -e .
+	$(PIPE) install -r requirements/dev.txt
+
+# ══════════════════════════════════════════════
+## Development
+# ══════════════════════════════════════════════
+
+dev: ## Start the FastAPI dev server with hot-reload
+	$(UVICORN) app.main:app --reload --host 0.0.0.0 --port $(PORT)
+
+# ══════════════════════════════════════════════
+## Testing & Coverage
+# ══════════════════════════════════════════════
+
+test: ## Run tests with short traceback
 	@echo "Running tests..."
 	$(PYTEST) -v --tb=short
 
-coverage: ## Run tests with coverage report
+coverage: ## Run tests with coverage report (term + HTML)
 	@echo "Running tests with coverage..."
 	$(PYTEST) --cov=app --cov-report=term-missing --cov-report=html
+
+# ══════════════════════════════════════════════
+## Linting & Formatting
+# ══════════════════════════════════════════════
+
+lint: ## Run linters (ruff check + mypy)
+	@echo "Running linters..."
+	$(RUFF) check .
+	$(MYPY) .
+
+lint-fix: ## Auto-fix lint issues where possible
+	$(RUFF) check --fix .
+
+format: ## Auto-format code (ruff format + import sorting)
+	@echo "Running code formatters..."
+	$(RUFF) format .
+	$(RUFF) check --fix --select I .
+
+# ══════════════════════════════════════════════
+## Database Migrations (Alembic)
+# ══════════════════════════════════════════════
+
+migrate: alembic-upgrade ## Alias for alembic-upgrade
 
 alembic-upgrade: ## Apply all pending migrations
 	$(ALEMBIC) upgrade head
@@ -39,7 +87,7 @@ alembic-upgrade: ## Apply all pending migrations
 alembic-downgrade: ## Rollback the last migration
 	$(ALEMBIC) downgrade -1
 
-alembic-revision: ## Create a new migration (usage: make alembic-revision msg="description")
+alembic-revision: ## Create a new auto-generated migration (msg="description")
 	$(ALEMBIC) revision --autogenerate -m "$(msg)"
 
 alembic-history: ## Show migration history
@@ -51,44 +99,39 @@ alembic-current: ## Show current migration version
 alembic-check: ## Check if migrations are up to date
 	$(ALEMBIC) check
 
-help: ## Display this help
-	@echo "Usage:"
-	@echo "  make [target] [PYTHON=python3] [PORT=8000]"
-	@echo ""
-	@echo "Targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
-	awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+# ══════════════════════════════════════════════
+## Docker
+# ══════════════════════════════════════════════
 
-$(VENV_DIR): ## Create virtual environment if it doesn't exist
-	@echo "Creating virtual environment..."
-	$(PYTHON) -m venv $(VENV_DIR)
-	@echo "Virtual environment created at $(VENV_DIR)."
+docker-build: ## Build the base Docker image only
+	$(DC) build base
 
-env: $(VENV_DIR) ## Create virtual environment
+docker-dev: ## Run the app in development mode via Docker
+	APP_PORT=$(APP_PORT) DB_PORT=$(DB_PORT) $(DC) --profile development up -d
+	@echo "App running at http://localhost:$(APP_PORT)"
 
-install: $(VENV_DIR) ## Create venv, install dependencies and hooks
-	@echo "Installing dependencies..."
-	$(PIP) install -e .
-	$(PIP) install -r requirements/dev.txt
+docker-prod: ## Run the app in production mode via Docker
+	APP_PORT=$(APP_PORT) DB_PORT=$(DB_PORT) $(DC) --profile production up -d
+	@echo "App running at http://localhost:$(APP_PORT)"
 
-dev: ## Run development server locally
-	@echo "Starting development server..."
-	$(UVICORN) app.main:app --reload --host 0.0.0.0 --port $(PORT)
+docker-down: ## Stop and remove all Docker containers
+	$(DC) down
 
-lint: ## Run linters (ruff and mypy)
-	@echo "Running linters..."
-	$(RUFF) check .
-	$(MYPY) .
+docker-logs: ## Tail logs from the backend containers
+	$(DC) logs -f backend-dev backend-prod
 
-format: ## Run code formatters
-	@echo "Running code formatters..."
-	$(RUFF) format .
-	$(RUFF) check --fix --select I .
+docker-shell: ## Open a shell inside the running backend-dev container
+	$(DC) exec backend-dev /bin/sh
 
-.PHONY: lint-fix
+docker-migrate: ## Run pending migrations inside the running backend-dev container
+	$(DC) exec backend-dev alembic upgrade head
 
-lint-fix: ## Auto-fix lint issues where possible
-	$(RUFF) check --fix .
+docker-clean: ## Remove all containers, volumes, and images created by compose
+	$(DC) down -v --rmi all
+
+# ══════════════════════════════════════════════
+## Housekeeping
+# ══════════════════════════════════════════════
 
 clean: ## Remove cache and build artifacts
 	@echo "Cleaning up..."
@@ -96,30 +139,16 @@ clean: ## Remove cache and build artifacts
 	find . -type d -name ".pytest_cache" -exec rm -rf {} +
 	find . -type d -name ".ruff_cache" -exec rm -rf {} +
 	find . -type d -name ".mypy_cache" -exec rm -rf {} +
-	rm -rf build/ dist/ *.egg-info
+	rm -rf build/ dist/ *.egg-info htmlcov/
 	@echo "Cleaned up."
 
-# Docker targets
+# ══════════════════════════════════════════════
+## Help
+# ══════════════════════════════════════════════
 
-docker-build: ## Build the base Docker image only
-	$(DC) build base
-
-docker-dev: ## Run the application in development mode via Docker
-	APP_PORT=$(APP_PORT) DB_PORT=$(DB_PORT) $(DC) --profile development up -d
-	@echo "App running at http://localhost:$(APP_PORT)"
-
-docker-prod: ## Run the application in production mode via Docker
-	APP_PORT=$(APP_PORT) DB_PORT=$(DB_PORT) $(DC) --profile production up -d
-	@echo "App running at http://localhost:$(APP_PORT)"
-
-docker-down: ## Stop and remove all Docker containers
-	$(DC) down
-
-docker-logs: ## Tail logs from the backend container
-	$(DC) logs -f backend-dev backend-prod
-
-docker-shell: ## Open a shell inside the running backend-dev container
-	$(DC) exec backend-dev /bin/sh
-
-docker-clean: ## Remove all containers, volumes, and images created by compose
-	$(DC) down -v --rmi all
+help: ## Show this help
+	@printf "\033[1mUsage:\033[0m\n  make [target]\n\n"
+	@awk 'BEGIN {FS = ":.*##"; group=""} \
+		/^## /    {group=substr($$0,4); next} \
+		/^[a-zA-Z_-]+:.*## / {if (group && group != last) {printf "\n\033[1m%s\033[0m\n", group; last=group}; \
+		printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)

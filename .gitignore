@@ -150,3 +150,9 @@ cython_debug/
 
 # VS Code
 .vscode/
+
+# Profile picture uploads (generated at runtime)
+uploads/
+
+# Alembic
+alembic/versions/*.pyc

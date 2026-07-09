@@ -5,6 +5,9 @@ description = "A well-organized FastAPI project"
 authors = [{ name = "Sachin Acharya" }]
 requires-python = ">=3.12"
 
+[tool.setuptools.packages.find]
+include = ["app*"]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 88
@@ -99,3 +102,6 @@ skips = ["B101"] # B101: use of assert is common in FastAPI/Pytest
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+filterwarnings = [
+    "ignore::DeprecationWarning:starlette.testclient",
+]

@@ -4,7 +4,7 @@ Configures the ASGI app with:
   - CORS middleware from configured origins
   - Custom AppError exception handler
   - API v1 router under versioned prefix
-  - Database table creation on startup via lifespan
+  - Static file mount for uploaded images in development
 """
 
 from collections.abc import AsyncGenerator
@@ -17,16 +17,13 @@ from starlette.staticfiles import StaticFiles
 
 from app.api.v1.api import api_router
 from app.core.config import settings
-from app.db.models import Base
-from app.db.session import engine
 from app.exceptions.base import AppError
 from app.exceptions.handlers import app_exception_handler
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
-    """Create all database tables on startup and clean up on shutdown."""
-    Base.metadata.create_all(bind=engine)
+    """Manage application startup and shutdown."""
     yield
 
 
